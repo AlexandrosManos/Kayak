@@ -15,7 +15,7 @@ echo "Using configuration ${CONFIG_FILE}${CONFIG_PFX}"
 if [ "$MODE" = "download" ]; then
 	if [ ! -e "$DOWNLOAD_PATH" ]; then
 		echo Fetching "http://dpdk.org/browse/dpdk/snapshot/dpdk-${DPDK_VER}.tar.gz"
-		curl -L http://dpdk.org/browse/dpdk/snapshot/dpdk-${DPDK_VER}.tar.gz -o "${DOWNLOAD_PATH}"
+		curl -L http://fast.dpdk.org/rel/dpdk-${DPDK_VER}.tar.gz -o "${DOWNLOAD_PATH}"
 	fi
 	if [ ! -d "${DPDK_RESULT}" ]; then
 		mkdir -p ${DPDK_RESULT}
@@ -33,7 +33,7 @@ fi
 
 cp "${CONFIG_FILE}${CONFIG_PFX}" "${DPDK_RESULT}/config/common_linuxapp"
 export RTE_TARGET=x86_64-native-linuxapp-gcc
-FLAGS="-g3 -Wno-error=maybe-uninitialized -fPIC"
+FLAGS="-g3 -Wno-error -Wno-implicit-fallthrough -fPIC"
 make config -C "${DPDK_RESULT}" T=x86_64-native-linuxapp-gcc \
 	EXTRA_CFLAGS="$FLAGS"
 PROCS="$(nproc)"
