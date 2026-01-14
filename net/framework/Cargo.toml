@@ -1,3 +1,4 @@
+cargo-features = ["edition2021"]
 [package]
 name = "e2d2"
 version = "0.2.0"
@@ -8,8 +9,8 @@ build = "build.rs"
 doctest = false
 
 [dependencies]
-libc = ">= 0.2.4"
-time = ">=0.1.0"
+libc = " 0.2.4"
+time = "0.1.0"
 getopts = "*"
 byteorder = "*"
 clippy = { version = "*", optional = true }
@@ -19,7 +20,7 @@ regex = "0.2.10"
 lazy_static = "*"
 net2 = "*"
 # NIX restricts us to just unix for now, we can fix this if someone cares at a later point.
-nix = "0.11.0"
+nix = "*"
 # Figure out if we want this permanently or just for now.
 rust-sctp = { git="https://github.com/netsys/rust-sctp", optional = true}
 toml = "0.4.5"
@@ -27,8 +28,8 @@ toml = "0.4.5"
 uuid= { version = "*", features=["v4"] }
 error-chain = "0.11.0"
 # etcdv3-rs={ git="https://github.com/apanda/etcdv3-rs" }
-tokio-core=">=0.1.8"
-futures=">=0.1.14"
+tokio-core="0.1.8"
+futures="0.1.14"
 
 [features]
 default = []
