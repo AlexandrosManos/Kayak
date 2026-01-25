@@ -1,4 +1,4 @@
-cargo-features = ["edition2021"]
+gargo-features = ["edition2021"]
 [package]
 name    = "db"
 version = "0.1.0"
@@ -29,7 +29,7 @@ path = "src/bin/net_bench.rs"
 [dependencies]
 hashbrown    = "0.1.8"
 libc         = "0.2.43"
-nix          = "0.11.0"
+nix          = "=0.17.0"
 log          = "0.3"
 rand         = "0.4"
 time         = "0.1"
@@ -45,6 +45,7 @@ rust-crypto  = "0.2.36"
 sandstorm    = {path = "../sandstorm"}
 e2d2         = {path = "../net/framework"}
 util         = {path = "../util"}
+backtrace = "=0.3.71"
 
 # Add feature name in default features to enable cyclecounter for the given stage,
 # where stage name can be ["dispatch", "execution"].

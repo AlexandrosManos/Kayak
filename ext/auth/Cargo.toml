@@ -10,4 +10,6 @@ crate-type = ["dylib"]
 [dependencies]
 sandstorm = { path = "../../sandstorm" }
 rust-crypto = "0.2.36"
-openssl = "0.10.24"
+openssl = "=0.10.64"
+openssl-sys = "=0.9.100"
+backtrace = "=0.3.71"

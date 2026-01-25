@@ -83,7 +83,8 @@ spin         = "0.5.2"  # Consider using parking lot?
 bytes        = "0.4.7"
 env_logger   = "0.3"
 libloading   = "0.3"
-openssl      = "0.10.24"
+openssl      = "=0.10.64"
+openssl-sys = "=0.9.100"
 rustlearn    = "0.5.0"
 serde        = "1.0.37"
 serde_derive = "1.0.37"
@@ -93,6 +94,8 @@ db           = {path = "../db"}
 sandstorm    = {path = "../sandstorm"}
 e2d2         = {path = "../net/framework"}
 util         = {path = "../util"}
+backtrace = "=0.3.71"
+time = "=0.1.45"
 
 # Add feature name in default features to enable cyclecounter for the given stage,
 # where stage name can be ["execution"].

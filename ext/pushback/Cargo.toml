@@ -10,3 +10,5 @@ crate-type = ["dylib"]
 [dependencies]
 db        = { path = "../../db" }
 sandstorm = { path = "../../sandstorm" }
+time = "=0.3.36"
+backtrace = "=0.3.71"
