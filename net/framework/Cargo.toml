@@ -24,7 +24,7 @@ nix = "0.11.0"
 rust-sctp = { git="https://github.com/netsys/rust-sctp", optional = true}
 toml = "0.4.5"
 # Hack for SHM
-uuid= { version = "*", features=["v4"] }
+uuid= { version = "=1.8.0", features=["v4"] }
 error-chain = "0.11.0"
 # etcdv3-rs={ git="https://github.com/apanda/etcdv3-rs" }
 tokio-core=">=0.1.8"
