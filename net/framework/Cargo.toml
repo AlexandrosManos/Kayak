@@ -28,6 +28,7 @@ uuid= { version = "=1.8.0", features=["v4"] }
 error-chain = "0.11.0"
 # etcdv3-rs={ git="https://github.com/apanda/etcdv3-rs" }
 tokio-core=">=0.1.8"
+# Pin to 0.1.31 to avoid futures 0.3.x which pulls syn 2.0.x (requires rustc 1.71+)
 futures="0.1.31"
 
 [features]
