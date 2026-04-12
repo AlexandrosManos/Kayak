@@ -95,6 +95,8 @@ e2d2         = {path = "../net/framework"}
 util         = {path = "../util"}
 backtrace    = "=0.3.71"
 time         = "=0.1.45"
+prometheus = "=0.13.0"
+lazy_static = "1.4"
 
 # Add feature name in default features to enable cyclecounter for the given stage,
 # where stage name can be ["execution"].

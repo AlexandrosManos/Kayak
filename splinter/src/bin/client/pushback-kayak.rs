@@ -22,6 +22,9 @@ extern crate splinter;
 extern crate time;
 extern crate zipf;
 extern crate order_stat;
+extern crate prometheus;       // <-- ADD THIS
+#[macro_use]                   // <-- ADD THIS
+extern crate lazy_static;      // <-- ADD THIS
 
 mod setup;
 
@@ -50,6 +53,33 @@ use splinter::proxy::KV;
 use splinter::sched::TaskManager;
 use splinter::*;
 use zipf::ZipfDistribution;
+
+// Prometheus add
+use prometheus::{IntCounterVec, GaugeVec, register_int_counter_vec, register_gauge_vec};
+use lazy_static::lazy_static;
+
+lazy_static! {
+    // We use a Counter for throughput (total ops). Prometheus will calculate the rate().
+    pub static ref TOTAL_OPS: IntCounterVec = register_int_counter_vec!(
+        "kayak_total_operations",
+        "Total operations completed by the client",
+        &["tenant_id"] // This label allows us to graph each core separately!
+    ).unwrap();
+
+    // We use a Gauge for Latency (it goes up and down)
+    pub static ref TAIL_LATENCY_US: GaugeVec = register_gauge_vec!(
+        "kayak_tail_latency_us",
+        "99th percentile tail latency in microseconds",
+        &["tenant_id"]
+    ).unwrap();
+
+    // We use a Gauge for RPC Fraction
+    pub static ref RPC_FRACTION: GaugeVec = register_gauge_vec!(
+        "kayak_rpc_fraction",
+        "Current percentage of pushback/RPCs",
+        &["tenant_id"]
+    ).unwrap();
+}
 
 // Flag to indicate that the client has finished sending and receiving the packets.
 static mut FINISHED: bool = false;
@@ -275,6 +305,12 @@ where
 
     // The length of the record.
     record_len: usize,
+
+    median: u64,
+    log_last_time: u64,
+    log_last_recvd: u64,
+    log_last_lat_len: usize,
+    tenant_id: String,
 }
 
 // Implementation of methods on PushbackRecv.
@@ -307,6 +343,7 @@ where
         number: u32,
         order: u32,
         ord2: u32,
+        tenant_id: String,
     ) -> PushbackRecvSend<T> {
         // The payload on an invoke() based get request consists of the extensions name ("pushback"),
         // the table id to perform the lookup on, number of get(), number of CPU cycles and the key to lookup.
@@ -392,6 +429,11 @@ where
             d_rate: 0,
             key_len: config.key_len,
             record_len: 1 + 8 + config.key_len + config.value_len,
+            median: 0,
+            log_last_time: cycles::rdtsc(),
+            log_last_recvd: 0,
+            log_last_lat_len: 0, 
+            tenant_id,
         }
     }
 
@@ -487,7 +529,43 @@ where
         if self.finished == true && self.stop > 0 {
             return;
         }
+        let curr_cycles = cycles::rdtsc();
 
+        if curr_cycles > self.log_last_time && (curr_cycles - self.log_last_time) > 240_000_000 {
+            
+            // 1. Update Throughput (Prometheus handles the ops/sec math later!)
+            // Batch the counter increment every 100ms rather than calling inc() per-packet.
+            // At 10Mpps on a DPDK busy-poll loop, per-packet atomics cause cache line
+            // contention across cores and collapse throughput. Prometheus rate() is unaffected
+            // since it scrapes at 15s intervals regardless.
+            let ops_in_interval = self.recvd - self.log_last_recvd;
+            TOTAL_OPS.with_label_values(&[&self.tenant_id]).inc_by(ops_in_interval as u64);
+
+            // 2. Update RPC Fraction
+            RPC_FRACTION.with_label_values(&[&self.tenant_id]).set((self.ext_p as f64) / 100.0);            // 3. Calculate and Update Tail Latency
+            let current_lat_len = self.latencies.len();
+            let interval_samples = current_lat_len.saturating_sub(self.log_last_lat_len);
+            
+            let min_samples = 50;
+            
+            let tail_latency_us = if interval_samples >= min_samples {
+                let mut interval_lats = self.latencies[self.log_last_lat_len..current_lat_len].to_vec();
+                let kth_index = (interval_lats.len() * 99) / 100;
+                let kth_val = *order_stat::kth(&mut interval_lats, kth_index);
+                
+                cycles::to_seconds(kth_val) * 1_000_000.0
+            } else {
+                std::f64::NAN // The canonical Prometheus way to say "No Data"
+            };
+
+            TAIL_LATENCY_US.with_label_values(&[&self.tenant_id]).set(tail_latency_us);
+
+            // 4. Update state for next interval (No return! Let the state update!)
+            self.log_last_time = curr_cycles;
+            self.log_last_recvd = self.recvd;
+            self.log_last_lat_len = current_lat_len; 
+        }
+        
         let mut packet_recvd_signal = false;
 
         // Try to receive packets from the network port.
@@ -639,7 +717,10 @@ where
                 if len > 100 && len % 10 == 0 {
                     let mut tmp = &self.latencies[(len-100)..len];
                     let mut tmpvec = tmp.to_vec();
-                    self.kth = *order_stat::kth(&mut tmpvec, 98);
+                    // self.kth = *order_stat::kth(&mut tmpvec, 98);
+                    tmpvec.sort();                 // Sort the 100 latencies
+                    self.median = tmpvec[50];      // Pick the middle one (Median)
+                    self.kth = tmpvec[98];
                 }
 
                 // Loop logic here
@@ -667,6 +748,7 @@ where
 
                     if self.max_out + out_delta > 2.0 {
                         self.max_out += out_delta;
+                        if self.max_out > 16.0 { self.max_out = 16.0; }
                     } else {
                         self.max_out = self.max_out * 0.5;
                         if self.max_out < 2.0 {self.max_out = 2.0;}
@@ -771,9 +853,9 @@ where
 
 
                     // Debug output
-//                        info!("rate {} d_rate {} ext_p {} op {}", rate, d_rate, self.ext_p, self.last_op);
+                    // info!("rate {} d_rate {} ext_p {} op {}", rate, d_rate, self.ext_p, self.last_op);
                     trace!("rdtsc {} len {} tail {} out {} recvd {} rate {} d_rate {} ext_p {} off {} XL",
-                          xloop_rdtsc, len, self.kth, self.max_out, self.recvd, xloop_rate, delta_rate, self.ext_p, bounded_offset_X);
+                                xloop_rdtsc, len, self.kth, self.max_out, self.recvd, xloop_rate, delta_rate, self.ext_p, bounded_offset_X);
 
                 }
 
@@ -888,6 +970,7 @@ fn setup_send_recv<S>(
         num,
         ord,
         ord2,
+        _core.to_string(),
     )) {
         Ok(_) => {
             info!(
@@ -904,6 +987,43 @@ fn setup_send_recv<S>(
 }
 
 fn main() {
+std::thread::spawn(move || {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use prometheus::Encoder;
+
+        let listener = TcpListener::bind("0.0.0.0:9898").expect("Failed to bind port 9898");
+        println!("Prometheus metrics server running on http://0.0.0.0:9898/metrics");
+
+        for stream in listener.incoming() {
+            if let Ok(mut stream) = stream {
+                let mut buffer = [0; 1024];
+                if let Ok(bytes_read) = stream.read(&mut buffer) {
+                    if bytes_read == 0 { continue; }
+                    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
+
+                    if request.starts_with("GET /metrics") {
+                        let mut metric_buffer = vec![];
+                        let encoder = prometheus::TextEncoder::new();
+                        let metric_families = prometheus::gather();
+                        encoder.encode(&metric_families, &mut metric_buffer).unwrap();
+
+                        let payload = String::from_utf8(metric_buffer).unwrap();
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\n\r\n{}",
+                            payload.len(),
+                            payload
+                        );
+                        let _ = stream.write_all(response.as_bytes());
+                    } else {
+                        let response = "HTTP/1.1 404 NOT FOUND\r\nContent-Length: 0\r\n\r\n";
+                        let _ = stream.write_all(response.as_bytes());
+                    }
+                }
+            }
+        }
+    });
+
     db::env_logger::init().expect("ERROR: failed to initialize logger!");
 
     let config = config::ClientConfig::load();
@@ -930,7 +1050,8 @@ fn main() {
     assert!(senders_receivers.len() == 8);
 
     // Setup 1 senders, and receivers.
-    for i in 0..1 {
+    //  for i in 0..1 {
+    for i in 0..8 {
         // First, retrieve a tx-rx queue pair from Netbricks
         let port = net_context
             .rx_queues
