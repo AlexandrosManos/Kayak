@@ -41,7 +41,7 @@ use_invoke = true
 
 # The number of tenants to generate requests for. The exact tenant id for a
 # particular request should be generated from a Zipfian distribution.
-num_tenants = 1
+num_tenants = 8
 
 # The skew parameter for the Zipfian distribution used to generate tenant id's
 # for RPC requests.
