@@ -1,3 +1,21 @@
+# Kayak — Reproduction Study (B.Sc. Thesis)
+
+> This fork accompanies my B.Sc. thesis at the University of Crete:
+> *"An Experimental Performance Study of Kayak, an Adaptive Dual-Loop Controller for
+> Multi-Tenant Applications over Extensible Storage"* (Supervisor: Prof. Kostas Magoutis, 2026).
+> Original work: [Kayak, NSDI '21](https://www.usenix.org/conference/nsdi21/presentation/you).
+
+**What I did**
+- Reproduced Kayak on CloudLab bare-metal servers (NetBricks/DPDK kernel-bypass networking).
+- Added a Prometheus telemetry pipeline to the `pushback-kayak` client to debug performance.
+- Traced a large throughput gap to Receive Side Scaling (RSS) queue saturation, and redesigned
+  the client to spread load across parallel senders, reaching the paper's target throughput
+  while keeping tail latency under the SLO.
+
+The original README follows below.
+
+---
+
 # Kayak
 Kayak is a prototype for proactive-adaptive arbitration between shipping compute and shipping data. Kayak is a fork of [Splinter](https://github.com/utah-scs/splinter).
 
